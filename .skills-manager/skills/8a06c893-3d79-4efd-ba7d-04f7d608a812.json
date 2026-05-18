@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "8a06c893-3d79-4efd-ba7d-04f7d608a812",
+  "path": "using-git-worktrees",
+  "path_key": "using-git-worktrees",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "skillssh",
+    "ref": "obra/superpowers/using-git-worktrees",
+    "subpath": "skills\\using-git-worktrees",
+    "branch": null
+  }
+}
