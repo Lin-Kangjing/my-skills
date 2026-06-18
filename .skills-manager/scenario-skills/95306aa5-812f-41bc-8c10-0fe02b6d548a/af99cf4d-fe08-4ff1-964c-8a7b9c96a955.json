@@ -9,7 +9,9 @@
     "cursor": true,
     "github_copilot": true,
     "openclaw": true,
+    "qclaw": true,
     "qoder": true,
+    "trae": true,
     "trae_cn": true
   }
 }

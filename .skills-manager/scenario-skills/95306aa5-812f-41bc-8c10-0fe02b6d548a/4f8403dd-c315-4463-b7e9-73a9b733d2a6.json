@@ -2,14 +2,16 @@
   "schema_version": 1,
   "scenario_id": "95306aa5-812f-41bc-8c10-0fe02b6d548a",
   "skill_id": "4f8403dd-c315-4463-b7e9-73a9b733d2a6",
-  "sort_order": 20,
+  "sort_order": 23,
   "tools": {
     "claude_code": true,
     "codebuddy": true,
     "cursor": true,
     "github_copilot": true,
     "openclaw": true,
+    "qclaw": true,
     "qoder": true,
+    "trae": true,
     "trae_cn": true
   }
 }
