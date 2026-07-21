@@ -16,11 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isGeneratedFile } from './lib/is-generated.mjs';
-import { getLiveDir, safeSessionId } from './lib/impeccable-paths.mjs';
-import { resolveLiveTemplateExtensions } from './lib/template-extensions.mjs';
 import { readBuffer as readManualEditsBuffer, writeBuffer as writeManualEditsBuffer } from './live/manual-edits-buffer.mjs';
-import { NEVER_SOURCE_DIRS, findSourceFile } from './live/source-search.mjs';
-import { withSourceLockSync } from './live/source-lock.mjs';
 import {
   applyDeferredSvelteComponentAccepts,
   findSvelteComponentManifest,
@@ -28,46 +24,7 @@ import {
   removeSvelteComponentSession,
 } from './live/svelte-component.mjs';
 
-const ACCEPT_LOCK_WAIT_MS = 1_000;
-// Mirrors VARIANT_ID_PATTERN in live/event-validation.mjs, which gates the same
-// value arriving over HTTP.
-const VARIANT_NUM_PATTERN = /^[0-9]{1,3}$/;
-
-/**
- * A thrown accept/discard is a real failure, not a manual handoff.
- *
- * live/completion.mjs only classifies a result as `error` when it carries
- * `mode: 'error'`; anything else unhandled falls through to `agent_done` with a
- * successful ack, and reference/live.md then tells the agent to finish the edit
- * by hand. That is right for the documented fallback paths and wrong here: a
- * `source_locked` contention needs a retry (hand-editing races the publisher
- * holding the lock), and a crash needs surfacing, not a hand-applied guess.
- */
-function operationFailure(err, extra = {}) {
-  return { handled: false, mode: 'error', error: err.message, ...extra };
-}
-
-/**
- * Mark an unhandled preview-path result as a real failure.
- *
- * operationFailure only covers results built from a *thrown* error. The accept
- * implementations also return `{handled: false, error}` for their own checks
- * (variant missing, template empty, original text ambiguous), and those arrived
- * without `mode`, so completion.mjs classified them as agent_done and
- * reference/live.md routed the agent to "read file, find markers, edit".
- *
- * That handoff only makes sense for a plain wrapper session, which is the one
- * shape with markers in the user's source to edit. Component and isolated
- * artifact previews keep the source clean until Accept, so there is nothing to
- * hand-edit and an unhandled result is always a failure. `previewMode` is
- * exactly that discriminator: only the preview branches set it.
- */
-function markPreviewFailure(result) {
-  if (result?.handled === false && !result.mode && result.previewMode) {
-    return { ...result, mode: 'error' };
-  }
-  return result;
-}
+const EXTENSIONS = ['.html', '.jsx', '.tsx', '.vue', '.svelte', '.astro'];
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -106,52 +63,7 @@ Output (JSON):
   const isDiscard = args.includes('--discard');
 
   if (!id) { console.error('Missing --id'); process.exit(1); }
-  // `id` becomes a path segment (accept receipts, preview manifests, generated
-  // component dirs). Reject separators and traversal here so one check covers
-  // every downstream sink.
-  try { safeSessionId(id); } catch { console.error('Invalid --id'); process.exit(1); }
   if (!isDiscard && !variantNum) { console.error('Need --discard or --variant N'); process.exit(1); }
-  // `variantNum` is interpolated into a RegExp and into the markup written back
-  // to source. The browser and the /events schema both constrain it to digits;
-  // enforce the same here, or `--variant '.*'` matches the `original` block
-  // first and silently accepts the original while reporting success.
-  if (!isDiscard && !VARIANT_NUM_PATTERN.test(variantNum)) {
-    console.error('Invalid --variant');
-    process.exit(1);
-  }
-
-  const requestedOperation = isDiscard ? 'discard' : 'accept';
-  const priorReceipt = readAcceptReceipt(process.cwd(), id);
-  if (priorReceipt) {
-    const sameOperation = priorReceipt.operation === requestedOperation
-      && (isDiscard || String(priorReceipt.variantId) === String(variantNum));
-    console.log(JSON.stringify(sameOperation
-      ? { ...priorReceipt.result, handled: true, alreadyApplied: true }
-      : {
-          // mode: 'error' is what marks this a real failure rather than a manual
-          // handoff. Without it, live/completion.mjs classifies the reply as
-          // agent_done and reference/live.md tells the agent to "read file, find
-          // markers, edit" by hand — which would apply a second, conflicting
-          // accept on top of the one the receipt already recorded.
-          handled: false,
-          mode: 'error',
-          error: 'accept_receipt_conflict',
-          priorOperation: priorReceipt.operation,
-          priorVariantId: priorReceipt.variantId ?? null,
-        }));
-    return;
-  }
-  const emitResult = (rawResult) => {
-    const result = markPreviewFailure(rawResult);
-    if (result?.handled !== false) {
-      writeAcceptReceipt(process.cwd(), id, {
-        operation: requestedOperation,
-        variantId: isDiscard ? null : String(variantNum),
-        result,
-      });
-    }
-    console.log(JSON.stringify(result));
-  };
 
   let paramValues = null;
   if (paramValuesRaw) {
@@ -170,55 +82,39 @@ Output (JSON):
 
   if (svelteComponentManifest) {
     if (isDiscard) {
-      let result;
-      try {
-        result = withSourceLockSync(
-          path.resolve(process.cwd(), svelteComponentManifest.sourceFile),
-          'discard:' + id,
-          () => {
-            removeSvelteComponentSession(id, process.cwd());
-            return { handled: true };
-          },
-          { waitMs: ACCEPT_LOCK_WAIT_MS },
-        );
-      } catch (err) {
-        result = operationFailure(err);
-      }
-      emitResult({
-        ...result,
+      removeSvelteComponentSession(id, process.cwd());
+      console.log(JSON.stringify({
+        handled: true,
         file: svelteComponentManifest.sourceFile,
         carbonize: false,
         previewMode: 'svelte-component',
         componentDir: svelteComponentManifest.componentDir,
-      });
+      }));
       return;
     }
 
     let result;
     try {
-      result = withSourceLockSync(
-        path.resolve(process.cwd(), svelteComponentManifest.sourceFile),
-        'accept:' + id,
-        () => inlineSvelteComponentAccept(
-          svelteComponentManifest,
-          variantNum,
-          paramValues,
-          process.cwd(),
-        ),
-        { waitMs: ACCEPT_LOCK_WAIT_MS },
+      result = inlineSvelteComponentAccept(
+        svelteComponentManifest,
+        variantNum,
+        paramValues,
+        process.cwd(),
       );
     } catch (err) {
-      result = operationFailure(err, {
+      result = {
+        handled: false,
+        error: err.message,
         file: svelteComponentManifest.sourceFile,
         sourceFile: svelteComponentManifest.sourceFile,
         previewMode: 'svelte-component',
         componentDir: svelteComponentManifest.componentDir,
-      });
+      };
     }
     if (result.carbonize) {
       result.todo = 'REQUIRED before next poll: carbonize cleanup in ' + result.file + '. See reference/live.md "Required after accept".';
     }
-    emitResult({ handled: result.handled !== false, ...result });
+    console.log(JSON.stringify({ handled: result.handled !== false, ...result }));
     return;
   }
 
@@ -249,25 +145,10 @@ Output (JSON):
   }
 
   if (isDiscard) {
-    let result;
-    // handleDiscard takes the source lock, which throws SOURCE_LOCKED under
-    // contention. Without this catch the CLI exits non-zero with empty stdout
-    // and the agent gets no JSON to act on.
-    try {
-      result = handleDiscard(id, lines, targetFile);
-    } catch (err) {
-      emitResult(operationFailure(err, { file: relFile }));
-      return;
-    }
-    emitResult({ handled: true, file: relFile, carbonize: false, ...result });
+    const result = handleDiscard(id, lines, targetFile);
+    console.log(JSON.stringify({ handled: true, file: relFile, carbonize: false, ...result }));
   } else {
-    let result;
-    try {
-      result = handleAccept(id, variantNum, lines, targetFile, paramValues);
-    } catch (err) {
-      emitResult(operationFailure(err, { file: relFile }));
-      return;
-    }
+    const result = handleAccept(id, variantNum, lines, targetFile, paramValues);
     const acceptedOriginalText = result.acceptedOriginalText || '';
     delete result.acceptedOriginalText;
     // Single-line attention-grabber when cleanup is required. The full
@@ -286,7 +167,7 @@ Output (JSON):
         // Non-fatal; the buffer stays as-is and the user can discard later.
       }
     }
-    emitResult({ handled: true, file: relFile, ...result });
+    console.log(JSON.stringify({ handled: true, file: relFile, ...result }));
   }
 }
 
@@ -354,14 +235,7 @@ function scrubManualEditsAgainstFile(_targetFile, cwd = process.cwd(), originalB
 // Discard
 // ---------------------------------------------------------------------------
 
-function handleDiscard(id, _lines, targetFile) {
-  return withSourceLockSync(targetFile, 'discard:' + id, () => {
-    const lines = fs.readFileSync(targetFile, 'utf-8').split('\n');
-    return handleDiscardUnlocked(id, lines, targetFile);
-  }, { waitMs: ACCEPT_LOCK_WAIT_MS });
-}
-
-function handleDiscardUnlocked(id, lines, targetFile) {
+function handleDiscard(id, lines, targetFile) {
   const block = findMarkerBlock(id, lines);
   if (!block) return { handled: false, error: 'Markers not found' };
 
@@ -456,24 +330,7 @@ function reindentContent(contentLines, fromIndent, toIndent) {
   });
 }
 
-function handleAccept(id, variantNum, _lines, targetFile, paramValues) {
-  return withSourceLockSync(targetFile, 'accept:' + id, () => {
-    const lines = fs.readFileSync(targetFile, 'utf-8').split('\n');
-    return handleAcceptUnlocked(id, variantNum, lines, targetFile, paramValues);
-  }, { waitMs: ACCEPT_LOCK_WAIT_MS });
-}
-
-function handleAcceptUnlocked(id, variantNum, lines, targetFile, paramValues) {
-  const built = buildAcceptedWrappedSource(id, variantNum, lines, targetFile, paramValues);
-  if (built.handled === false) return built;
-  fs.writeFileSync(targetFile, built.content, 'utf-8');
-  return {
-    carbonize: built.carbonize,
-    acceptedOriginalText: built.acceptedOriginalText,
-  };
-}
-
-function buildAcceptedWrappedSource(id, variantNum, lines, targetFile, paramValues) {
+function handleAccept(id, variantNum, lines, targetFile, paramValues) {
   const block = findMarkerBlock(id, lines);
   if (!block) return { handled: false, error: 'Markers not found' };
 
@@ -518,13 +375,10 @@ function buildAcceptedWrappedSource(id, variantNum, lines, targetFile, paramValu
     ...replacement,
     ...lines.slice(replaceRange.end + 1),
   ];
-  return {
-    content: newLines.join('\n'),
-    carbonize: needsCarbonize,
-    acceptedOriginalText: originalContent.join('\n'),
-  };
-}
+  fs.writeFileSync(targetFile, newLines.join('\n'), 'utf-8');
 
+  return { carbonize: needsCarbonize, acceptedOriginalText: originalContent.join('\n') };
+}
 
 function readSourceShadowPreviewMeta(content, id) {
   const escaped = escapeRegExp(id);
@@ -892,51 +746,57 @@ function detectCommentSyntax(filePath) {
 // File search (find the file containing session markers)
 // ---------------------------------------------------------------------------
 
-/**
- * Accept also skips `dist` / `build` outright, where wrap descends into them so
- * its `includeGenerated` second pass can report a `generatedMatch`. Accept has
- * no such pass: a marker found in build output is only ever a stale copy of the
- * marker in source.
- */
-const SEARCH_SKIP_DIRS = [...NEVER_SOURCE_DIRS, 'dist', 'build'];
-
 function findSessionFile(id, cwd) {
-  const result = findSourceFile({
-    query: 'impeccable-variants-start ' + id,
-    cwd,
-    extensions: resolveLiveTemplateExtensions(cwd),
-    skipDirs: SEARCH_SKIP_DIRS,
-  });
-  if (!result) return null;
-  const content = fs.readFileSync(result, 'utf-8');
-  return { file: result, content, lines: content.split('\n') };
+  const marker = 'impeccable-variants-start ' + id;
+  const searchDirs = ['src', 'app', 'pages', 'components', 'public', 'views', 'templates', '.'];
+  const seen = new Set();
+
+  for (const dir of searchDirs) {
+    const absDir = path.join(cwd, dir);
+    if (!fs.existsSync(absDir)) continue;
+    const result = searchDir(absDir, marker, seen, 0);
+    if (result) {
+      const content = fs.readFileSync(result, 'utf-8');
+      return { file: result, content, lines: content.split('\n') };
+    }
+  }
+  return null;
+}
+
+function searchDir(dir, query, seen, depth) {
+  if (depth > 5) return null;
+  let realDir;
+  try { realDir = fs.realpathSync(dir); } catch { return null; }
+  if (seen.has(realDir)) return null;
+  seen.add(realDir);
+
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+  catch { return null; }
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) continue;
+    const filePath = path.join(dir, entry.name);
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      if (content.includes(query)) return filePath;
+    } catch { /* skip */ }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (['node_modules', '.git', 'dist', 'build'].includes(entry.name)) continue;
+    const result = searchDir(path.join(dir, entry.name), query, seen, depth + 1);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-
-function acceptReceiptPath(cwd, id) {
-  return path.join(getLiveDir(cwd), 'accept-receipts', `${safeSessionId(id)}.json`);
-}
-
-function readAcceptReceipt(cwd, id) {
-  try { return JSON.parse(fs.readFileSync(acceptReceiptPath(cwd, id), 'utf-8')); } catch { return null; }
-}
-
-function writeAcceptReceipt(cwd, id, receipt) {
-  const file = acceptReceiptPath(cwd, id);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const value = {
-    id,
-    ...receipt,
-    completedAt: new Date().toISOString(),
-  };
-  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + '\n', 'utf-8');
-  fs.renameSync(temporary, file);
-  return value;
-}
 
 function argVal(args, flag) {
   const idx = args.indexOf(flag);

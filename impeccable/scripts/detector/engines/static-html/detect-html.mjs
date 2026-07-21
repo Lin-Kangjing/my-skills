@@ -8,7 +8,6 @@ import {
   mergeDesignSystemFindings,
 } from '../../design-system.mjs';
 import { isFullPage } from '../../shared/page.mjs';
-import { applyInlineIgnores } from '../../shared/inline-ignores.mjs';
 import { finding } from '../../findings.mjs';
 import { profileFindings, profileStep, profileStepAsync } from '../../profile/profiler.mjs';
 import {
@@ -224,11 +223,7 @@ async function detectHtml(filePath, options = {}) {
     }
   }
 
-  const byProvider = filterByProviders(findings, options.providers);
-  // Static-HTML findings carry no line number, so only whole-file
-  // `impeccable-disable` directives apply here — exactly the standalone-document
-  // waiver this primitive targets. Bypassed by `--no-config` / `--no-inline-ignores`.
-  return options?.inlineIgnores === false ? byProvider : applyInlineIgnores(byProvider, html);
+  return filterByProviders(findings, options.providers);
 }
 
 export { checkStaticPageTypography, STATIC_ELEMENT_RULES, detectHtml };
