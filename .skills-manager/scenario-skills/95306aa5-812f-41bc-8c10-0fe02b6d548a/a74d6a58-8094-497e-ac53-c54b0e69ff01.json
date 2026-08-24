@@ -6,6 +6,7 @@
   "tools": {
     "codebuddy": true,
     "cursor": true,
+    "deepseek_harness": true,
     "openclaw": true,
     "qclaw": true,
     "qoder": true,

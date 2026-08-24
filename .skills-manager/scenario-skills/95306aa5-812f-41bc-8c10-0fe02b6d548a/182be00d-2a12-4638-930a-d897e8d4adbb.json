@@ -5,6 +5,7 @@
   "sort_order": 1,
   "tools": {
     "codebuddy": true,
+    "deepseek_harness": true,
     "qoder": true,
     "trae": true,
     "trae_cn": true,
