@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "91d728c4-7691-484b-8d76-6fd3fe12029f",
+  "path": "engramory-init",
+  "path_key": "engramory-init",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}
