@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scenario_id": "95306aa5-812f-41bc-8c10-0fe02b6d548a",
   "skill_id": "ea91f0c6-d524-4708-b00b-40df5e9ab8a1",
-  "sort_order": 6,
+  "sort_order": 9,
   "tools": {
     "claude_code": true,
     "codebuddy": true,
@@ -13,7 +13,7 @@
     "qclaw": true,
     "qoder": true,
     "trae": true,
-    "trae_cn": false,
+    "trae_cn": true,
     "workbuddy": true
   }
 }

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "ce87c799-2e69-4ba3-8a40-c1ac0b8396bb",
+  "path": "vue-route-query-autofill",
+  "path_key": "vue-route-query-autofill",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "import",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

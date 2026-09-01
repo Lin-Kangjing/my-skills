@@ -8,7 +8,7 @@
     "deepseek_harness": true,
     "qoder": true,
     "trae": true,
-    "trae_cn": false,
+    "trae_cn": true,
     "workbuddy": true
   }
 }

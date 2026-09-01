@@ -1,0 +1,35 @@
+{
+  "skill_name": "vue-route-query-autofill",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "在 Vue 页面中，我需要处理从其他页面跳转过来的 URL 查询参数。当用户从通知记录页面点击按钮跳转到通知策略页面时，要把通知策略名称作为参数传递过去，并在目标页面自动填充到搜索框中。请帮我实现这个功能。",
+      "expected_output": "在目标页面的 onMounted 中使用循环遍历 $route.query 并填充到 queryParams",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "帮我写一个方法，当页面加载时自动从 URL 参数中获取 name 和 status 字段，并设置到 queryParams 中，然后自动执行搜索。",
+      "expected_output": "使用 for...in 遍历 query 对象，检查 key 是否在 queryParams 中，然后赋值",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "有两个页面：订单列表和订单详情。我需要在订单详情页面点击'查看同类订单'按钮时，跳转到订单列表页面，并自动带上当前订单的类型和状态作为筛选条件。怎么实现？",
+      "expected_output": "源页面使用 $router.resolve 生成带 query 参数的 URL，目标页面在 onMounted 中遍历 query 填充到 queryParams",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "我的页面需要从路由参数中读取 pageNum 和 pageSize，但是它们是字符串类型，需要转换成数字。请帮我写这段代码。",
+      "expected_output": "遍历 query 时添加类型转换逻辑，将 pageNum 和 pageSize 转换为 Number 类型",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "URL 中的查询参数名是 userName，但我的 queryParams 中对应的字段叫 name。怎么在自动填充时做字段映射？",
+      "expected_output": "使用字段映射表（fieldMapping）将 URL 参数名映射到 queryParams 字段名",
+      "files": []
+    }
+  ]
+}

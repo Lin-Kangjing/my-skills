@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b4660a49-b35e-4d25-a38d-b687ee0e25ae",
+  "path": "ai-coding-review",
+  "path_key": "ai-coding-review",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "import",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}
