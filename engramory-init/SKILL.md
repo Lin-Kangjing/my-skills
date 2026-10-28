@@ -5,7 +5,7 @@ description: "在项目中初始化 Engramory 记忆协议。当用户要求安�
 
 # Engramory 初始化
 
-在当前项目中初始化 Engramory 记忆协议。采用全局 + 项目双层架构，全局规则和 Hook 已预装在 `~/.trae-cn/`，本 Skill 只需为项目创建记忆目录和 .gitignore 条目。
+在当前项目中初始化 Engramory 记忆协议。采用全局 + 项目双层架构，全局规则和 Hook 已预装在 `~/.trae-cn/`，本 Skill 只需为项目创建记忆目录。
 
 ## 架构说明
 
@@ -17,7 +17,6 @@ Engramory 采用**全局 + 项目**双层架构：
 | 全局 | `~/.trae-cn/hooks.json` | PreToolUse Hook 配置 | 所有项目自动生效 |
 | 全局 | `~/.trae-cn/hooks/engramory_index_guard.js` | 索引大小守卫脚本 | 所有项目共享 |
 | 项目 | `.engramory-memory/MEMORY.md` | 记忆索引 + 详细笔记 | 仅当前项目 |
-| 项目 | `.gitignore` | 排除 `/.engramory-memory/` | 仅当前项目 |
 
 ## 触发条件
 
@@ -48,7 +47,7 @@ Engramory 采用**全局 + 项目**双层架构：
 > Soft cap 150 lines / 20 KB (warn). Hard cap 200 lines / 25 KB (compact first).
 > One line per memory: `- [<title>](<slug>.md) — <one-line hook>`
 > Plain-text & unencrypted: never store secret *values* here (only where they
-> live); keep this store git-ignored and out of cloud-synced / backed-up folders.
+> live).
 
 ## user
 <!-- who the user is: identity, role, durable preferences -->
@@ -63,22 +62,11 @@ Engramory 采用**全局 + 项目**双层架构：
 <!-- pointers to external resources: URLs, dashboards, tickets, log paths -->
 ```
 
-### 3. 更新 .gitignore
-
-在项目根目录的 `.gitignore` 中追加：
-
-```gitignore
-/.engramory-memory/
-```
-
-如果 `.gitignore` 不存在则创建。
-
-### 4. 验证安装
+### 3. 验证安装
 
 逐一检查：
 
 - `.engramory-memory/MEMORY.md` 存在且内容正确
-- `.gitignore` 中包含 `/.engramory-memory/`
 - 全局规则文件存在
 - 全局 Hook 脚本存在
 - 全局 `hooks.json` 包含 `engramory_index_guard` 命令
@@ -91,7 +79,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"<项目路径>/.engramory-
 
 应静默退出（exit 0，无输出）。
 
-### 5. 输出安装结果
+### 4. 输出安装结果
 
 向用户汇报安装完成的文件列表，并提示：
 
